@@ -1,0 +1,24 @@
+# Project TODO
+
+- [x] Establish the warm cream-and-coffee visual system with responsive desktop and mobile foundations.
+- [x] Create a laptop-first app shell with an elegant sidebar and compact mobile navigation.
+- [x] Build the overview dashboard with countdown, daily goal, progress summary, and preparation phase timeline.
+- [x] Implement daily study-session logging, weekly hours, streak calculation, and a 28-day activity heatmap.
+- [x] Implement the Physics, Chemistry, and Mathematics syllabus tracker with chapter stages, mastery views, flags, stars, and notes.
+- [x] Implement chapter-detail views with study notes, stage controls, formulas, and revision context.
+- [x] Build an organized JEE formula flashcard library with review-state filters and self-testing interactions.
+- [x] Implement mock-test score logging, subject metrics, trends, mastery analytics, and weak-topic insights.
+- [x] Implement personalized JEE Copilot guidance based on the student's securely stored progress and performance data.
+- [x] Add a resilient AI-assisted next-action recommendation, personalized coach notes, and mistake-pattern insights.
+- [x] Add secure database schema, typed server procedures, and client data integration.
+- [x] Add automated tests for tracking logic and server procedures.
+- [x] Verify visual quality and responsive behavior on laptop and mobile breakpoints.
+- [ ] Save a final project checkpoint and provide the hackathon demo handoff.
+- [x] Calculate the streak and 28-day heatmap directly from recorded study sessions.
+- [x] Add a chapter-detail modal with editable notes, a revision context, and relevant formula cards.
+- [x] Add flashcard chapter filtering and shaky-only review mode.
+- [x] Derive weak-topic insights from mock performance and chapter progress instead of subject-level labels alone.
+- [x] Generate JEE Copilot messages and AI insights from the authenticated student’s saved server-side records.
+- [x] Add tRPC procedure tests for saved study records and authenticated AI guidance inputs.
+- [x] Combine mock-test subject performance with chapter progress when selecting the weak-topic insight.
+- [x] Add server-procedure tests for saving student goals, chapter progress, study sessions, mock attempts, and flashcard reviews.

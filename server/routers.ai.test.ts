@@ -66,4 +66,16 @@ describe("ai guidance procedures", () => {
     expect(result).toBe("Work on rotational motion.");
     expect(getStudentDashboard).toHaveBeenCalledWith(42);
   });
+
+  it("grounds chapter, practice, and mock-analysis requests in the authenticated study context", async () => {
+    const caller = appRouter.createCaller(context());
+    await caller.ai.chapter({ chapter: "Rotational Motion", question: "Explain this chapter simply." });
+    await caller.ai.practice({ subject: "Physics", chapter: "Rotational Motion", difficulty: "medium", count: 5 });
+    await caller.ai.mockPostMortem({ mockTotal: 162, wrong: "Torque sign", guessed: "", skipped: "", difficultCorrect: "" });
+
+    expect(getStudentDashboard).toHaveBeenCalledTimes(3);
+    expect(invokeLLM).toHaveBeenLastCalledWith(expect.objectContaining({
+      messages: expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining("Torque sign") })]),
+    }));
+  });
 });

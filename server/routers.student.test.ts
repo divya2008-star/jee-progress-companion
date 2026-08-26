@@ -7,9 +7,10 @@ vi.mock("./db", () => ({
   addStudySession: vi.fn(),
   addMockTest: vi.fn(),
   saveFlashcardReview: vi.fn(),
+  saveDailyPlan: vi.fn(),
 }));
 
-import { addMockTest, addStudySession, saveChapterProgress, saveFlashcardReview, setDailyGoal } from "./db";
+import { addMockTest, addStudySession, saveChapterProgress, saveDailyPlan, saveFlashcardReview, setDailyGoal } from "./db";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -41,7 +42,7 @@ describe("student record procedures", () => {
     await caller.student.addMock({ physics: 56, chemistry: 61, mathematics: 45, attemptedAt: completedAt });
     await caller.student.reviewFlashcard({ cardId: "p-rot-1", status: "shaky" });
 
-    expect(addStudySession).toHaveBeenCalledWith(7, 90, "Rotational Motion", completedAt);
+    expect(addStudySession).toHaveBeenCalledWith(7, 90, "Rotational Motion", completedAt, undefined, undefined);
     expect(addMockTest).toHaveBeenCalledWith(7, 56, 61, 45, completedAt);
     expect(saveFlashcardReview).toHaveBeenCalledWith(7, "p-rot-1", "shaky");
   });
@@ -49,5 +50,15 @@ describe("student record procedures", () => {
   it("rejects an invalid daily goal before attempting to save it", async () => {
     await expect(appRouter.createCaller(context()).student.setDailyGoal({ minutes: 0 })).rejects.toThrow();
     expect(setDailyGoal).not.toHaveBeenCalled();
+  });
+
+  it("saves a calculated daily plan under the authenticated student", async () => {
+    await appRouter.createCaller(context()).student.saveDailyPlan({
+      availableMinutes: 180,
+      intensity: "focused",
+      preferredSubjects: ["Physics", "Chemistry"],
+      items: [{ id: "today-1", subject: "Physics", chapterId: "phy-6", chapter: "Rotational Motion", task: "Timed PYQs", minutes: 60, reason: "Flagged for review" }],
+    });
+    expect(saveDailyPlan).toHaveBeenCalledWith(expect.objectContaining({ userId: 7, availableMinutes: 180, intensity: "focused" }));
   });
 });

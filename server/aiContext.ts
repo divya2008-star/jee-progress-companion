@@ -8,7 +8,7 @@ type ChapterRecord = {
   chapterId: string;
 };
 
-type SessionRecord = { minutes: number; focus: string; completedAt: Date };
+type SessionRecord = { minutes: number; focus: string; completedAt: Date; notes?: string | null; difficulty?: "easy" | "okay" | "difficult" | "very_difficult" | null };
 type MockRecord = { physics: number; chemistry: number; mathematics: number; total: number; attemptedAt: Date };
 type FlashcardRecord = { cardId: string; status: "known" | "shaky" };
 
@@ -37,7 +37,8 @@ export function buildStudentStudyContext(snapshot: StudentStudySnapshot, now = n
   const latestMock = recentMocks[0] ? `Latest mock: ${recentMocks[0].total}/300 (Physics ${recentMocks[0].physics}, Chemistry ${recentMocks[0].chemistry}, Mathematics ${recentMocks[0].mathematics}).` : "No saved mock attempts yet.";
   const flagged = snapshot.chapters.filter((chapter) => chapter.flagged).map((chapter) => chapter.chapterId).join(", ") || "none";
   const notes = snapshot.chapters.filter((chapter) => chapter.notes.trim()).map((chapter) => `${chapter.chapterId}: ${chapter.notes}`).join(" | ") || "No mistake notes logged.";
+  const reflections = snapshot.sessions.filter((session) => session.difficulty || session.notes?.trim()).slice(0, 5).map((session) => `${session.focus}: ${session.difficulty ?? "unrated"}${session.notes?.trim() ? `; note: ${session.notes}` : ""}`).join(" | ") || "No focus reflections logged.";
   const shaky = snapshot.flashcards.filter((card) => card.status === "shaky").length;
 
-  return `Authenticated JEE student. Target date: ${target.toISOString().slice(0, 10)}; ${daysLeft} days remain. Daily goal: ${dailyGoal} minutes; today completed: ${todayMinutes} minutes. ${subjectSummary}. ${latestMock} Flagged chapters: ${flagged}. Mistake notes: ${notes}. Flashcard records: ${snapshot.flashcards.length}; shaky cards: ${shaky}. Use only this saved record; when it is sparse, say what the student should log next.`;
+  return `Authenticated JEE student. Target date: ${target.toISOString().slice(0, 10)}; ${daysLeft} days remain. Daily goal: ${dailyGoal} minutes; today completed: ${todayMinutes} minutes. ${subjectSummary}. ${latestMock} Flagged chapters: ${flagged}. Mistake notes: ${notes}. Focus reflections: ${reflections}. Flashcard records: ${snapshot.flashcards.length}; shaky cards: ${shaky}. Use only this saved record; when it is sparse, say what the student should log next.`;
 }

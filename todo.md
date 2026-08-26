@@ -13,7 +13,7 @@
 - [x] Add secure database schema, typed server procedures, and client data integration.
 - [x] Add automated tests for tracking logic and server procedures.
 - [x] Verify visual quality and responsive behavior on laptop and mobile breakpoints.
-- [ ] Save a final project checkpoint and provide the hackathon demo handoff.
+- [x] Save a final project checkpoint and provide the hackathon demo handoff.
 - [x] Calculate the streak and 28-day heatmap directly from recorded study sessions.
 - [x] Add a chapter-detail modal with editable notes, a revision context, and relevant formula cards.
 - [x] Add flashcard chapter filtering and shaky-only review mode.
@@ -22,3 +22,24 @@
 - [x] Add tRPC procedure tests for saved study records and authenticated AI guidance inputs.
 - [x] Combine mock-test subject performance with chapter progress when selecting the weak-topic insight.
 - [x] Add server-procedure tests for saving student goals, chapter progress, study sessions, mock attempts, and flashcard reviews.
+- [x] Review the supplied submission material and implement the highest-impact hackathon refinement.
+- [x] Re-verify the refined dashboard and present the strengthened hackathon story.
+- [x] Audit the existing dashboard, routing, server procedures, and data model before extending the product.
+- [x] Add a data-derived Today command center with priorities, purpose, and actionable study blocks.
+- [x] Add a smart daily planner with availability, subject preference, intensity, editable plan blocks, and scheduling rationale.
+- [x] Add polished focus mode with a timer, session notes, difficulty rating, and persistence into future recommendations.
+- [x] Add a smart revision queue that combines stages, target weeks, shaky flashcards, mock outcomes, and revision recency.
+- [x] Add spaced-repetition review buckets that schedule known and shaky formula cards differently.
+- [x] Add JEE readiness signals, meaningful empty states, alerts, achievements, and an improvement timeline based on stored records.
+- [x] Add chapter-aware Copilot guidance, progressive explanation mode, marks-loss analysis, and mock post-mortem inputs.
+- [x] Add quick practice and Daily 10 question-generation flows with reliable AI failure states.
+- [x] Add database migrations, secure server procedures, client integration, and tests for the additive planning upgrade.
+- [x] Verify that every existing dashboard feature remains available on desktop and mobile after the upgrade.
+- [x] Apply a bold dark, neon-academic editorial design system inspired by the supplied reference without removing any existing product capability.
+- [x] Add editable daily-plan block controls and persist the revised plan.
+- [x] Use focus-session difficulty and notes in planning recommendations and AI context.
+- [x] Add a dedicated evidence-based marks-loss analysis with an honest low-data state.
+- [x] Verify each existing navigation section and key interaction at desktop and mobile breakpoints.
+- [x] Verify each major dashboard section at desktop and mobile breakpoints using direct navigation views.
+- [ ] Deliver the refined hackathon handoff and product story for the enhanced command center.
+- [x] Repair the light-card text contrast in the legacy Overview, Syllabus, and Analytics sections within the dark command-center shell.

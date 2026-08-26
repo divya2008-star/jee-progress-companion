@@ -3,9 +3,16 @@ import { AIChatBox, type Message } from "@/components/AIChatBox";
 import { FormulaFilterBar } from "@/components/FormulaFilterBar";
 import { ChapterDetail } from "@/components/ChapterDetail";
 import { WeakTopicReport } from "@/components/WeakTopicReport";
+import { TodayCommandCenter } from "@/components/TodayCommandCenter";
+import { FocusMode } from "@/components/FocusMode";
+import { PracticeStudio } from "@/components/PracticeStudio";
+import { MockPostMortem } from "@/components/MockPostMortem";
+import { ProgressSignals } from "@/components/ProgressSignals";
+import { MarksLossAnalysis } from "@/components/MarksLossAnalysis";
 import { startLogin } from "@/const";
 import { flashcards, initialChapters, stageMeta, type Chapter, type Stage, type Subject } from "@/data/jee";
 import { trpc } from "@/lib/trpc";
+import { buildDailyPlan, buildRevisionQueue, buildSmartAlerts, calculateReadiness, type PlanItem, type PlannerIntensity } from "@/lib/studyEngine";
 import {
   Area,
   AreaChart,
@@ -42,10 +49,10 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-type Section = "overview" | "syllabus" | "analytics" | "formulas";
+type Section = "today" | "overview" | "syllabus" | "analytics" | "formulas" | "practice";
 type Modal = "session" | "mock" | null;
 
-type Session = { id: number; minutes: number; focus: string; completedAt: Date };
+type Session = { id: number; minutes: number; focus: string; completedAt: Date; notes?: string | null; difficulty?: "easy" | "okay" | "difficult" | "very_difficult" | null };
 type Mock = { id: number; physics: number; chemistry: number; mathematics: number; total: number; attemptedAt: Date };
 
 const demoSessions: Session[] = [
@@ -62,10 +69,12 @@ const demoMocks: Mock[] = [
 ];
 
 const navigation = [
+  { id: "today" as const, label: "Today", icon: Sparkles },
   { id: "overview" as const, label: "Overview", icon: LayoutDashboard },
   { id: "syllabus" as const, label: "Syllabus", icon: BookOpen },
   { id: "analytics" as const, label: "Mock analytics", icon: TrendingUp },
   { id: "formulas" as const, label: "Formula lab", icon: BookMarked },
+  { id: "practice" as const, label: "Practice", icon: BrainCircuit },
 ];
 
 const stageOrder: Stage[] = ["not_started", "revising", "revised", "test_ready"];
@@ -82,11 +91,18 @@ function formatDay(date: Date) {
 
 export default function Home() {
   const { user, isAuthenticated } = useAuth();
-  const [section, setSection] = useState<Section>("overview");
+  const [section, setSection] = useState<Section>(() => {
+    const requested = new URLSearchParams(window.location.search).get("view") as Section | null;
+    return requested && navigation.some((item) => item.id === requested) ? requested : "today";
+  });
   const [chapters, setChapters] = useState<Chapter[]>(initialChapters);
   const [sessions, setSessions] = useState<Session[]>(demoSessions);
   const [mocks, setMocks] = useState<Mock[]>(demoMocks);
   const [reviews, setReviews] = useState<Record<string, "known" | "shaky">>({ "p-rot-1": "shaky", "c-thermo-1": "known" });
+  const [reviewSchedule, setReviewSchedule] = useState<Record<string, { intervalDays: number; nextReviewAt: Date }>>({
+    "p-rot-1": { intervalDays: 1, nextReviewAt: new Date() },
+    "c-thermo-1": { intervalDays: 5, nextReviewAt: new Date(Date.now() + 5 * 86400000) },
+  });
   const [modal, setModal] = useState<Modal>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [chapterSearch, setChapterSearch] = useState("");
@@ -100,12 +116,16 @@ export default function Home() {
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [aiInsight, setAiInsight] = useState<string>("");
   const [dailyGoal, setDailyGoal] = useState(180);
+  const [todayPlan, setTodayPlan] = useState<PlanItem[]>([]);
+  const [planMeta, setPlanMeta] = useState<{ availableMinutes: number; intensity: PlannerIntensity; preferredSubjects: Subject[] }>({ availableMinutes: 300, intensity: "focused", preferredSubjects: ["Physics", "Chemistry", "Mathematics"] });
+  const [focusTask, setFocusTask] = useState<PlanItem | null>(null);
 
   const serverDashboard = trpc.student.dashboard.useQuery(undefined, { enabled: isAuthenticated });
   const saveChapter = trpc.student.saveChapter.useMutation();
   const addSession = trpc.student.addSession.useMutation();
   const addMock = trpc.student.addMock.useMutation();
   const reviewFlashcard = trpc.student.reviewFlashcard.useMutation();
+  const saveDailyPlan = trpc.student.saveDailyPlan.useMutation();
   const chat = trpc.ai.chat.useMutation({
     onSuccess: (reply) => setChatMessages((messages) => [...messages, { role: "assistant", content: reply }]),
     onError: () => {
@@ -143,6 +163,13 @@ export default function Home() {
     }
     if (saved.flashcards.length > 0) {
       setReviews(Object.fromEntries(saved.flashcards.map((item) => [item.cardId, item.status])));
+      setReviewSchedule(Object.fromEntries(saved.flashcards.map((item) => [item.cardId, { intervalDays: item.intervalDays ?? 1, nextReviewAt: item.nextReviewAt ? new Date(item.nextReviewAt) : new Date() }])));
+    }
+    if (saved.dailyPlan?.planItems) {
+      try {
+        setTodayPlan(JSON.parse(saved.dailyPlan.planItems) as PlanItem[]);
+        setPlanMeta({ availableMinutes: saved.dailyPlan.availableMinutes, intensity: saved.dailyPlan.intensity, preferredSubjects: JSON.parse(saved.dailyPlan.preferredSubjects) as Subject[] });
+      } catch { setTodayPlan([]); }
     }
   }, [serverDashboard.data]);
 
@@ -211,6 +238,56 @@ export default function Home() {
 
   const chartData = mocks.map((mock, index) => ({ attempt: `Mock ${index + 1}`, score: mock.total, physics: mock.physics, chemistry: mock.chemistry, mathematics: mock.mathematics }));
   const radarData = statistics.bySubject.map((item) => ({ subject: item.subject.slice(0, 4), mastery: item.score }));
+  const cardChapterIds = useMemo(() => Object.fromEntries(flashcards.map((card) => [card.id, card.chapterId])), []);
+  const revisionQueue = useMemo(() => buildRevisionQueue(chapters, mocks, reviews, cardChapterIds, sessions), [chapters, mocks, reviews, cardChapterIds, sessions]);
+  const readiness = useMemo(() => calculateReadiness(chapters, mocks, reviews, sessions), [chapters, mocks, reviews, sessions]);
+  const smartAlerts = useMemo(() => buildSmartAlerts(chapters, mocks, sessions), [chapters, mocks, sessions]);
+  const reviewBuckets = useMemo(() => {
+    const now = Date.now();
+    return Object.entries(reviews).reduce((buckets, [cardId, status]) => {
+      const schedule = reviewSchedule[cardId];
+      if (!schedule || schedule.nextReviewAt.getTime() <= now) buckets.due += 1;
+      else if (schedule.nextReviewAt.getTime() <= now + 3 * 86400000) buckets.soon += 1;
+      else if (status === "known" && schedule.intervalDays >= 14) buckets.mastered += 1;
+      else buckets.later += 1;
+      return buckets;
+    }, { due: 0, soon: 0, later: 0, mastered: 0 });
+  }, [reviewSchedule, reviews]);
+
+  useEffect(() => {
+    if (todayPlan.length > 0) return;
+    setTodayPlan(buildDailyPlan({ chapters, mocks, reviews, cardChapterIds, sessions, availableMinutes: 300, preferredSubjects: ["Physics", "Chemistry", "Mathematics"], intensity: "focused" }));
+  }, [cardChapterIds, chapters, mocks, reviews, todayPlan.length]);
+
+  function generateTodayPlan(availableMinutes: number, intensity: PlannerIntensity, preferredSubjects: Subject[]) {
+    const plan = buildDailyPlan({ chapters, mocks, reviews, cardChapterIds, sessions, availableMinutes, preferredSubjects, intensity });
+    setTodayPlan(plan);
+    setPlanMeta({ availableMinutes, intensity, preferredSubjects });
+    if (isAuthenticated) saveDailyPlan.mutate({ availableMinutes, intensity, preferredSubjects, items: plan });
+    toast.success("A data-derived study plan is ready.");
+  }
+
+  function togglePlanTask(id: string) {
+    const updated = todayPlan.map((item) => item.id === id ? { ...item, completed: !item.completed } : item);
+    setTodayPlan(updated);
+    if (isAuthenticated) saveDailyPlan.mutate({ ...planMeta, items: updated });
+  }
+
+  function updatePlanTask(id: string, patch: Partial<Pick<PlanItem, "task" | "minutes">>) {
+    const updated = todayPlan.map((item) => item.id === id ? { ...item, ...patch } : item);
+    setTodayPlan(updated);
+    if (isAuthenticated) saveDailyPlan.mutate({ ...planMeta, items: updated });
+  }
+
+  function finishFocus(notes: string, difficulty: "easy" | "okay" | "difficult" | "very_difficult") {
+    if (!focusTask) return;
+    const session = { id: Date.now(), minutes: focusTask.minutes, focus: `${focusTask.chapter}: ${focusTask.task}`, notes, difficulty, completedAt: new Date() };
+    setSessions((items) => [session, ...items]);
+    if (isAuthenticated) addSession.mutate({ minutes: session.minutes, focus: session.focus, completedAt: session.completedAt, notes, difficulty });
+    setTodayPlan((items) => items.map((item) => item.id === focusTask.id ? { ...item, completed: true } : item));
+    setFocusTask(null);
+    toast.success("Focus session saved. Your next recommendation will use this reflection.");
+  }
 
   function persistChapter(chapter: Chapter) {
     if (!isAuthenticated) return;
@@ -268,6 +345,10 @@ export default function Home() {
   function markCard(status: "known" | "shaky") {
     if (!shownCard) return;
     setReviews((items) => ({ ...items, [shownCard.id]: status }));
+    setReviewSchedule((items) => {
+      const intervalDays = status === "known" ? Math.min(Math.max(items[shownCard.id]?.intervalDays ?? 2, 2) * 2, 21) : 1;
+      return { ...items, [shownCard.id]: { intervalDays, nextReviewAt: new Date(Date.now() + intervalDays * 86400000) } };
+    });
     if (isAuthenticated) reviewFlashcard.mutate({ cardId: shownCard.id, status });
     setFlipped(false);
     setActiveCard((index) => index + 1);
@@ -292,50 +373,53 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF6F0] text-[#3D281E]">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[258px] flex-col border-r border-[#EADCCD] bg-[#FFFDF9] px-5 py-7 lg:flex">
+    <div className="min-h-screen bg-[#08090F] text-[#F6F4FF]">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[258px] flex-col border-r border-white/10 bg-[#0D0F18] px-5 py-7 lg:flex">
         <div className="flex items-center gap-3 px-2">
-          <div className="grid size-10 place-items-center rounded-2xl bg-[#4D2A1D] text-[#F6D89D] shadow-[0_10px_25px_rgba(79,42,28,0.2)]"><GraduationCap className="size-5" /></div>
-          <div><p className="jee-title text-xl leading-none">Momentum</p><p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#A47859]">JEE companion</p></div>
+          <div className="grid size-10 place-items-center rounded-2xl bg-[#C7FF3C] text-[#11121B] shadow-[0_10px_25px_rgba(199,255,60,.18)]"><GraduationCap className="size-5" /></div>
+          <div><p className="jee-title text-xl leading-none text-white">Momentum</p><p className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#C7FF3C]">JEE study OS</p></div>
         </div>
         <nav className="mt-12 space-y-2">
           {navigation.map((item) => {
             const Icon = item.icon;
             const active = section === item.id;
-            return <button key={item.id} onClick={() => setSection(item.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all ${active ? "bg-[#4D2A1D] text-[#FFF7E8] shadow-[0_10px_22px_rgba(79,42,28,0.16)]" : "text-[#806252] hover:bg-[#F7EBDD]"}`}><Icon className="size-[18px]" />{item.label}</button>;
+            return <button key={item.id} onClick={() => setSection(item.id)} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all ${active ? "bg-[#C7FF3C] text-[#11121B] shadow-[0_10px_22px_rgba(199,255,60,.15)]" : "text-white/55 hover:bg-white/[.06] hover:text-white"}`}><Icon className="size-[18px]" />{item.label}</button>;
           })}
         </nav>
-        <div className="mt-auto rounded-[1.5rem] bg-[#F7E5CB] p-4">
-          <div className="flex items-center gap-2 text-[#79523B]"><Flame className="size-4 fill-[#C78336] text-[#C78336]" /><span className="text-sm font-bold">4-day rhythm</span></div>
-          <p className="mt-2 text-xs leading-5 text-[#896957]">Keep a small promise to your future self today.</p>
-          <button onClick={() => setModal("session")} className="mt-4 w-full rounded-xl bg-[#D69F58] py-2 text-xs font-bold text-white transition-transform active:scale-[0.97]">Log a session</button>
+        <div className="mt-auto rounded-[1.5rem] border border-white/10 bg-white/[.04] p-4">
+          <div className="flex items-center gap-2 text-white"><Flame className="size-4 fill-[#FF4FA7] text-[#FF4FA7]" /><span className="text-sm font-bold">{streak}-day rhythm</span></div>
+          <p className="mt-2 text-xs leading-5 text-white/45">Build a clean signal for your future self today.</p>
+          <button onClick={() => setModal("session")} className="mt-4 w-full rounded-xl bg-[#FF4FA7] py-2 text-xs font-bold text-white transition-transform active:scale-[0.97]">Log a session</button>
         </div>
-        <div className="mt-5 flex items-center gap-3 px-2 text-sm"><div className="grid size-9 place-items-center rounded-full bg-[#EEDBC5] font-bold text-[#76523D]">{user?.name?.charAt(0).toUpperCase() ?? "A"}</div><div className="min-w-0"><p className="truncate font-bold">{user?.name ?? "Demo aspirant"}</p><p className="truncate text-xs text-[#A07D69]">{isAuthenticated ? "Synced workspace" : "Local demo workspace"}</p></div></div>
+        <div className="mt-5 flex items-center gap-3 px-2 text-sm"><div className="grid size-9 place-items-center rounded-full bg-[#63C8FF] font-bold text-[#11121B]">{user?.name?.charAt(0).toUpperCase() ?? "A"}</div><div className="min-w-0"><p className="truncate font-bold text-white">{user?.name ?? "Demo aspirant"}</p><p className="truncate text-xs text-white/40">{isAuthenticated ? "Synced workspace" : "Local demo workspace"}</p></div></div>
       </aside>
 
-      <header className="sticky top-0 z-20 border-b border-[#EADCCD]/80 bg-[#FFFDF9]/90 px-4 py-3 backdrop-blur lg:ml-[258px] lg:border-none lg:bg-transparent lg:px-9 lg:pt-7">
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-[#08090F]/90 px-4 py-3 backdrop-blur lg:ml-[258px] lg:border-none lg:bg-transparent lg:px-9 lg:pt-7">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between">
-          <div className="flex items-center gap-3 lg:hidden"><button onClick={() => setMenuOpen(!menuOpen)} className="grid size-10 place-items-center rounded-xl bg-white shadow-sm"><Menu className="size-5" /></button><div><p className="jee-title text-xl">Momentum</p><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#A47859]">JEE companion</p></div></div>
-          <div className="hidden lg:block"><p className="jee-kicker">Your preparation space</p><h1 className="jee-title mt-1 text-3xl">Good afternoon, {user?.name?.split(" ")[0] ?? "Aspirant"}.</h1></div>
-          <div className="flex items-center gap-3"><div className="hidden rounded-full border border-[#EADCCD] bg-white px-3 py-2 text-xs font-semibold text-[#806252] sm:flex sm:items-center sm:gap-2"><CalendarDays className="size-3.5" />{formatDay(new Date())}</div>{!isAuthenticated && <button onClick={() => startLogin()} className="rounded-full bg-[#4D2A1D] px-4 py-2.5 text-xs font-bold text-[#FFF8EC] shadow-sm transition-transform active:scale-[0.97]">Save my progress</button>}</div>
+          <div className="flex items-center gap-3 lg:hidden"><button onClick={() => setMenuOpen(!menuOpen)} className="grid size-10 place-items-center rounded-xl bg-white/10 text-white shadow-sm"><Menu className="size-5" /></button><div><p className="jee-title text-xl text-white">Momentum</p><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#C7FF3C]">JEE study OS</p></div></div>
+          <div className="hidden lg:block"><p className="today-kicker text-[#C7FF3C]">Your preparation space</p><h1 className="jee-title mt-1 text-3xl text-white">Good afternoon, {user?.name?.split(" ")[0] ?? "Aspirant"}.</h1></div>
+          <div className="flex items-center gap-3"><div className="hidden rounded-full border border-white/10 bg-white/[.04] px-3 py-2 text-xs font-semibold text-white/60 sm:flex sm:items-center sm:gap-2"><CalendarDays className="size-3.5" />{formatDay(new Date())}</div>{!isAuthenticated && <button onClick={() => startLogin()} className="rounded-full bg-[#C7FF3C] px-4 py-2.5 text-xs font-bold text-[#11121B] shadow-sm transition-transform active:scale-[0.97]">Save my progress</button>}</div>
         </div>
-        {menuOpen && <div className="absolute left-4 right-4 top-[68px] rounded-2xl border border-[#EADCCD] bg-[#FFFDF9] p-2 shadow-xl lg:hidden">{navigation.map((item) => { const Icon = item.icon; return <button key={item.id} onClick={() => { setSection(item.id); setMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${section === item.id ? "bg-[#F2DDC3] text-[#4D2A1D]" : "text-[#806252]"}`}><Icon className="size-4" />{item.label}</button>; })}</div>}
+        {menuOpen && <div className="absolute left-4 right-4 top-[68px] rounded-2xl border border-white/10 bg-[#121421] p-2 shadow-xl lg:hidden">{navigation.map((item) => { const Icon = item.icon; return <button key={item.id} onClick={() => { setSection(item.id); setMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${section === item.id ? "bg-[#C7FF3C] text-[#11121B]" : "text-white/60"}`}><Icon className="size-4" />{item.label}</button>; })}</div>}
       </header>
 
       <main className="mx-auto max-w-[1500px] px-4 pb-28 pt-5 lg:ml-[258px] lg:px-9 lg:pb-12 lg:pt-4">
+        {section === "today" && <div className="space-y-6"><TodayCommandCenter plan={todayPlan} readiness={readiness} queue={revisionQueue} alerts={smartAlerts} weeklyMinutes={weeklyMinutes} sessionsCount={sessions.length} reviewBuckets={reviewBuckets} onGenerate={generateTodayPlan} onStartFocus={setFocusTask} onToggleTask={togglePlanTask} onUpdateTask={updatePlanTask} /><ProgressSignals chapters={chapters} mocks={mocks} sessions={sessions} reviews={reviews} streak={streak} /></div>}
         {section === "overview" && <Overview
           daysLeft={daysLeft} dailyGoal={dailyGoal} todayMinutes={todayMinutes} weeklyMinutes={weeklyMinutes} streak={streak} heatmapDays={heatmapDays} statistics={statistics} nextChapter={nextChapter} sessions={sessions} chartData={chartData} radarData={radarData} aiInsight={aiInsight} insightLoading={insight.isPending} chatMessages={chatMessages} chatLoading={chat.isPending} onAddSession={() => setModal("session")} onAddMock={() => setModal("mock")} onAdvance={() => advanceChapter(nextChapter)} onSendChat={sendMessage} onAskInsight={requestInsight} onOpenSyllabus={() => setSection("syllabus")} />}
         {section === "syllabus" && <Syllabus chapters={filteredChapters} search={chapterSearch} setSearch={setChapterSearch} subject={subjectFilter} setSubject={setSubjectFilter} starredOnly={starredOnly} setStarredOnly={setStarredOnly} onUpdate={updateChapter} onAdvance={advanceChapter} onOpenChapter={setSelectedChapter} overall={statistics.overall} />}
-        {section === "analytics" && <><Analytics chartData={chartData} radarData={radarData} currentMock={currentMock} bestMock={bestMock} weakSubject={weakSubject} weakTopic={weakTopic} onAddMock={() => setModal("mock")} onAskInsight={() => requestInsight("mistake-pattern analysis")} aiInsight={aiInsight} loading={insight.isPending} /><WeakTopicReport topic={weakTopic} /></>}
+        {section === "analytics" && <div className="space-y-6"><Analytics chartData={chartData} radarData={radarData} currentMock={currentMock} bestMock={bestMock} weakSubject={weakSubject} weakTopic={weakTopic} onAddMock={() => setModal("mock")} onAskInsight={() => requestInsight("mistake-pattern analysis")} aiInsight={aiInsight} loading={insight.isPending} /><WeakTopicReport topic={weakTopic} /><MarksLossAnalysis mocks={mocks} /><MockPostMortem total={currentMock.total} mockCount={mocks.length} /></div>}
         {section === "formulas" && <div className="space-y-4"><FormulaFilterBar subject={subjectFilter} setSubject={(value: Subject | "All") => { setSubjectFilter(value); setCardChapterFilter("All chapters"); setActiveCard(0); }} chapterFilter={cardChapterFilter} setChapterFilter={(value: string) => { setCardChapterFilter(value); setActiveCard(0); }} shakyOnly={shakyOnly} setShakyOnly={(value: boolean) => { setShakyOnly(value); setActiveCard(0); }} chapterOptions={Array.from(new Set(flashcards.filter((card) => subjectFilter === "All" || card.subject === subjectFilter).map((card) => card.chapter)))} /><FormulaLab card={shownCard} total={filteredCards.length} index={activeCard % Math.max(filteredCards.length, 1)} flipped={flipped} setFlipped={setFlipped} subject={subjectFilter} setSubject={(value) => { setSubjectFilter(value); setCardChapterFilter("All chapters"); setActiveCard(0); }} reviews={reviews} onMark={markCard} onShuffle={() => { if (filteredCards.length) { setActiveCard(Math.floor(Math.random() * filteredCards.length)); setFlipped(false); } }} /></div>}
+        {section === "practice" && <PracticeStudio chapters={chapters} />}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-[#EADCCD] bg-[#FFFDF9]/95 px-2 py-2 backdrop-blur lg:hidden">
-        {navigation.map((item) => { const Icon = item.icon; const active = section === item.id; return <button key={item.id} onClick={() => setSection(item.id)} className={`flex min-w-[66px] flex-col items-center gap-1 rounded-xl py-1.5 text-[10px] font-bold ${active ? "text-[#5C3424]" : "text-[#AA8B78]"}`}><Icon className={`size-[19px] ${active ? "fill-[#F2DDC3]" : ""}`} />{item.label.split(" ")[0]}</button>; })}
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-white/10 bg-[#0D0F18]/95 px-2 py-2 backdrop-blur lg:hidden">
+        {navigation.map((item) => { const Icon = item.icon; const active = section === item.id; return <button key={item.id} onClick={() => setSection(item.id)} className={`flex min-w-[56px] flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-bold ${active ? "text-[#C7FF3C]" : "text-white/40"}`}><Icon className={`size-[18px] ${active ? "fill-[#C7FF3C]/20" : ""}`} />{item.label.split(" ")[0]}</button>; })}
       </nav>
 
       {modal && <ModalForm modal={modal} onClose={() => setModal(null)} onSession={addFocusSession} onMock={addNewMock} />}
       {selectedChapter && <ChapterDetail chapter={selectedChapter} onClose={() => setSelectedChapter(null)} onUpdate={updateChapter} onAdvance={advanceChapter} />}
+      {focusTask && <FocusMode task={focusTask} onClose={() => setFocusTask(null)} onFinish={finishFocus} />}
       {serverDashboard.isError && isAuthenticated && <p className="fixed bottom-20 right-4 z-40 rounded-xl bg-[#4D2A1D] px-4 py-3 text-xs text-white shadow-xl">Your local dashboard is ready; saved data will retry automatically.</p>}
     </div>
   );

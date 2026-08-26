@@ -41,6 +41,8 @@ export const studySessions = mysqlTable("studySessions", {
   userId: int("userId").notNull(),
   minutes: int("minutes").notNull(),
   focus: varchar("focus", { length: 120 }).default("Focused revision").notNull(),
+  notes: text("notes"),
+  difficulty: mysqlEnum("difficulty", ["easy", "okay", "difficult", "very_difficult"]),
   completedAt: timestamp("completedAt").defaultNow().notNull(),
 });
 
@@ -61,9 +63,26 @@ export const flashcardReviews = mysqlTable(
     userId: int("userId").notNull(),
     cardId: varchar("cardId", { length: 100 }).notNull(),
     status: mysqlEnum("status", ["known", "shaky"]).notNull(),
+    intervalDays: int("intervalDays").default(1).notNull(),
+    nextReviewAt: timestamp("nextReviewAt"),
     reviewedAt: timestamp("reviewedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => [uniqueIndex("flashcard_user_unique").on(table.userId, table.cardId)]
+);
+
+export const dailyPlans = mysqlTable(
+  "dailyPlans",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    planDate: varchar("planDate", { length: 10 }).notNull(),
+    availableMinutes: int("availableMinutes").notNull(),
+    intensity: mysqlEnum("intensity", ["steady", "focused", "sprint"]).notNull(),
+    preferredSubjects: text("preferredSubjects").notNull(),
+    planItems: text("planItems").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => [uniqueIndex("daily_plan_user_date_unique").on(table.userId, table.planDate)]
 );
 
 export type User = typeof users.$inferSelect;

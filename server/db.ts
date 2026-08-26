@@ -1,7 +1,8 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   chapterProgress,
+  dailyPlans,
   flashcardReviews,
   InsertUser,
   mockTests,
@@ -54,16 +55,18 @@ export async function getUserByOpenId(openId: string) {
 export async function getStudentDashboard(userId: number) {
   const db = await getDb();
   if (!db) {
-    return { profile: null, chapters: [], sessions: [], mocks: [], flashcards: [] };
+    return { profile: null, chapters: [], sessions: [], mocks: [], flashcards: [], dailyPlan: null };
   }
-  const [profile, chapters, sessions, mocks, flashcards] = await Promise.all([
+  const planDate = new Date().toISOString().slice(0, 10);
+  const [profile, chapters, sessions, mocks, flashcards, dailyPlan] = await Promise.all([
     db.select().from(studentProfiles).where(eq(studentProfiles.userId, userId)).limit(1),
     db.select().from(chapterProgress).where(eq(chapterProgress.userId, userId)),
     db.select().from(studySessions).where(eq(studySessions.userId, userId)).orderBy(desc(studySessions.completedAt)).limit(90),
     db.select().from(mockTests).where(eq(mockTests.userId, userId)).orderBy(desc(mockTests.attemptedAt)).limit(30),
     db.select().from(flashcardReviews).where(eq(flashcardReviews.userId, userId)),
+    db.select().from(dailyPlans).where(and(eq(dailyPlans.userId, userId), eq(dailyPlans.planDate, planDate))).limit(1),
   ]);
-  return { profile: profile[0] ?? null, chapters, sessions, mocks, flashcards };
+  return { profile: profile[0] ?? null, chapters, sessions, mocks, flashcards, dailyPlan: dailyPlan[0] ?? null };
 }
 
 export async function setDailyGoal(userId: number, dailyGoalMinutes: number) {
@@ -86,10 +89,10 @@ export async function saveChapterProgress(input: {
   });
 }
 
-export async function addStudySession(userId: number, minutes: number, focus: string, completedAt: Date) {
+export async function addStudySession(userId: number, minutes: number, focus: string, completedAt: Date, notes?: string, difficulty?: "easy" | "okay" | "difficult" | "very_difficult") {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
-  await db.insert(studySessions).values({ userId, minutes, focus, completedAt });
+  await db.insert(studySessions).values({ userId, minutes, focus, completedAt, notes, difficulty });
 }
 
 export async function addMockTest(userId: number, physics: number, chemistry: number, mathematics: number, attemptedAt: Date) {
@@ -101,5 +104,26 @@ export async function addMockTest(userId: number, physics: number, chemistry: nu
 export async function saveFlashcardReview(userId: number, cardId: string, status: "known" | "shaky") {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable");
-  await db.insert(flashcardReviews).values({ userId, cardId, status }).onDuplicateKeyUpdate({ set: { status, reviewedAt: new Date() } });
+  const existing = await db.select().from(flashcardReviews).where(and(eq(flashcardReviews.userId, userId), eq(flashcardReviews.cardId, cardId))).limit(1);
+  const intervalDays = status === "known" ? Math.min(Math.max(existing[0]?.intervalDays ?? 2, 2) * 2, 21) : 1;
+  const nextReviewAt = new Date(Date.now() + intervalDays * 86400000);
+  await db.insert(flashcardReviews).values({ userId, cardId, status, intervalDays, nextReviewAt }).onDuplicateKeyUpdate({ set: { status, intervalDays, nextReviewAt, reviewedAt: new Date() } });
+}
+
+export type DailyPlanItem = { id: string; subject: "Physics" | "Chemistry" | "Mathematics" | "Revision"; chapterId?: string; chapter: string; task: string; minutes: number; reason: string; completed?: boolean };
+
+export async function saveDailyPlan(input: { userId: number; availableMinutes: number; intensity: "steady" | "focused" | "sprint"; preferredSubjects: string[]; items: DailyPlanItem[] }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  const planDate = new Date().toISOString().slice(0, 10);
+  await db.insert(dailyPlans).values({
+    userId: input.userId,
+    planDate,
+    availableMinutes: input.availableMinutes,
+    intensity: input.intensity,
+    preferredSubjects: JSON.stringify(input.preferredSubjects),
+    planItems: JSON.stringify(input.items),
+  }).onDuplicateKeyUpdate({
+    set: { availableMinutes: input.availableMinutes, intensity: input.intensity, preferredSubjects: JSON.stringify(input.preferredSubjects), planItems: JSON.stringify(input.items), updatedAt: new Date() },
+  });
 }

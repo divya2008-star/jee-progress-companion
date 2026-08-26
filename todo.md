@@ -41,5 +41,13 @@
 - [x] Add a dedicated evidence-based marks-loss analysis with an honest low-data state.
 - [x] Verify each existing navigation section and key interaction at desktop and mobile breakpoints.
 - [x] Verify each major dashboard section at desktop and mobile breakpoints using direct navigation views.
-- [ ] Deliver the refined hackathon handoff and product story for the enhanced command center.
+- [x] Deliver the refined hackathon handoff and product story for the enhanced command center.
+- [x] Remove raw Markdown symbols from all visible AI assistant responses and apply restrained study-friendly emoji formatting.
+- [x] Make the practice generator return a validated structured MCQ set rather than prose guidance.
+- [x] Implement a sequential one-question-at-a-time MCQ interface with option selection, immediate green/red feedback, correct-answer reveal, and gated next-question progression.
+- [x] Add tests and desktop/mobile verification for clean AI rendering and interactive practice-state transitions.
+- [x] Verify clean rendered AI output across each visible Copilot surface at desktop and mobile breakpoints.
+- [x] Run and document end-to-end MCQ generation, answer feedback, correct-answer reveal, and next-question gating.
+- [x] Add route-level verification that every visible Copilot output path is sanitized before rendering.
+- [x] Add an integrated test that verifies a generated MCQ set passes through answer feedback and gated progression rules.
 - [x] Repair the light-card text contrast in the legacy Overview, Syllabus, and Analytics sections within the dark command-center shell.

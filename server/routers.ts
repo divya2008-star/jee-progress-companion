@@ -5,6 +5,7 @@ import { invokeLLM } from "./_core/llm";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
 import { buildStudentStudyContext } from "./aiContext";
+import { cleanCopilotText } from "../shared/copilotText";
 import * as db from "./db";
 
 const chapterInput = z.object({
@@ -29,6 +30,18 @@ const planItemInput = z.object({
   completed: z.boolean().optional(),
 });
 
+const practiceQuestionSchema = z.object({
+  question: z.string().min(12).max(700),
+  options: z.array(z.string().min(1).max(280)).length(4),
+  correctIndex: z.number().int().min(0).max(3),
+  explanation: z.string().min(8).max(700),
+});
+
+const practiceSetSchema = z.object({
+  title: z.string().min(1).max(160),
+  questions: z.array(practiceQuestionSchema).min(3).max(10),
+});
+
 async function generateGuidance(kind: string, message: string, context: string) {
   const prompt = kind === "chat"
     ? `Student message: ${message}`
@@ -45,7 +58,7 @@ async function generateGuidance(kind: string, message: string, context: string) 
     ],
   });
   const content = response.choices[0]?.message.content;
-  return typeof content === "string" && content.trim() ? content : "I could not generate guidance right now. Please try again.";
+  return typeof content === "string" && content.trim() ? cleanCopilotText(content) : "I could not generate guidance right now. Please try again.";
 }
 
 export const appRouter = router({
@@ -86,8 +99,48 @@ export const appRouter = router({
     }),
     practice: protectedProcedure.input(z.object({ subject: z.enum(["Physics", "Chemistry", "Mathematics"]), chapter: z.string().min(1).max(120), difficulty: z.enum(["foundation", "medium", "challenge"]), count: z.number().int().min(3).max(10) })).mutation(async ({ ctx, input }) => {
       const snapshot = await db.getStudentDashboard(ctx.user.id);
-      const request = `Create exactly ${input.count} self-contained JEE practice questions for ${input.subject}, chapter ${input.chapter}, at ${input.difficulty} difficulty. Use a clean numbered markdown format. For each question, include a concise answer and explanation directly below it, then a short topic label. Make all numerical data complete and internally consistent. Do not claim the student answered these questions or fabricate performance results.`;
-      return generateGuidance("practice set", request, buildStudentStudyContext(snapshot));
+      const response = await invokeLLM({
+        model: "claude-haiku-4-5",
+        maxTokens: 5200,
+        messages: [
+          { role: "system", content: "You create accurate, self-contained JEE multiple-choice practice. Return only JSON matching the schema. Every question must have exactly four plausible options, one correctIndex from 0 to 3, and a concise explanation. Never use Markdown or mention the student record." },
+          { role: "user", content: `Create exactly ${input.count} ${input.difficulty} JEE MCQs for ${input.subject}, chapter ${input.chapter}. Keep numerical values complete and internally consistent. Student context may guide topic selection only; do not mention it:\n${buildStudentStudyContext(snapshot)}` },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "jee_practice_set",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                questions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      question: { type: "string" },
+                      options: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
+                      correctIndex: { type: "integer", minimum: 0, maximum: 3 },
+                      explanation: { type: "string" },
+                    },
+                    required: ["question", "options", "correctIndex", "explanation"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["title", "questions"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+      const content = response.choices[0]?.message.content;
+      if (typeof content !== "string") throw new Error("Practice generation returned no text content.");
+      const parsed = practiceSetSchema.parse(JSON.parse(content));
+      if (parsed.questions.length !== input.count) throw new Error("Practice question count did not match the request.");
+      return parsed;
     }),
   }),
 });

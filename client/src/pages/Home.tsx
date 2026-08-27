@@ -51,6 +51,16 @@ import { toast } from "sonner";
 
 type Section = "today" | "overview" | "syllabus" | "analytics" | "formulas" | "practice";
 type Modal = "session" | "mock" | null;
+const targetDateValues = ["2027-01-21", "2027-01-22", "2027-01-23", "2027-01-24", "2027-01-28"] as const;
+type TargetExamDate = (typeof targetDateValues)[number];
+type ExamDateOption = { id: TargetExamDate; label: string; date: Date };
+const jeeMainJanuaryDateOptions: ExamDateOption[] = [
+  { id: "2027-01-21", label: "21 Jan", date: new Date("2027-01-21T12:00:00.000Z") },
+  { id: "2027-01-22", label: "22 Jan", date: new Date("2027-01-22T12:00:00.000Z") },
+  { id: "2027-01-23", label: "23 Jan", date: new Date("2027-01-23T12:00:00.000Z") },
+  { id: "2027-01-24", label: "24 Jan", date: new Date("2027-01-24T12:00:00.000Z") },
+  { id: "2027-01-28", label: "28 Jan", date: new Date("2027-01-28T12:00:00.000Z") },
+];
 
 type Session = { id: number; minutes: number; focus: string; completedAt: Date; notes?: string | null; difficulty?: "easy" | "okay" | "difficult" | "very_difficult" | null };
 type Mock = { id: number; physics: number; chemistry: number; mathematics: number; total: number; attemptedAt: Date };
@@ -116,6 +126,7 @@ export default function Home() {
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [aiInsight, setAiInsight] = useState<string>("");
   const [dailyGoal, setDailyGoal] = useState(180);
+  const [targetDateId, setTargetDateId] = useState<TargetExamDate>("2027-01-21");
   const [todayPlan, setTodayPlan] = useState<PlanItem[]>([]);
   const [planMeta, setPlanMeta] = useState<{ availableMinutes: number; intensity: PlannerIntensity; preferredSubjects: Subject[] }>({ availableMinutes: 300, intensity: "focused", preferredSubjects: ["Physics", "Chemistry", "Mathematics"] });
   const [focusTask, setFocusTask] = useState<PlanItem | null>(null);
@@ -126,6 +137,7 @@ export default function Home() {
   const addMock = trpc.student.addMock.useMutation();
   const reviewFlashcard = trpc.student.reviewFlashcard.useMutation();
   const saveDailyPlan = trpc.student.saveDailyPlan.useMutation();
+  const saveExamDate = trpc.student.setExamDate.useMutation();
   const chat = trpc.ai.chat.useMutation({
     onSuccess: (reply) => setChatMessages((messages) => [...messages, { role: "assistant", content: reply }]),
     onError: () => {
@@ -142,6 +154,10 @@ export default function Home() {
     if (!saved) return;
 
     if (saved.profile?.dailyGoalMinutes) setDailyGoal(saved.profile.dailyGoalMinutes);
+    if (saved.profile?.targetExamDate) {
+      const savedTargetDate = new Date(saved.profile.targetExamDate).toISOString().slice(0, 10);
+      if ((targetDateValues as readonly string[]).includes(savedTargetDate)) setTargetDateId(savedTargetDate as TargetExamDate);
+    }
     if (saved.chapters.length > 0) {
       setChapters((items) => items.map((chapter) => {
         const persisted = saved.chapters.find((item) => item.chapterId === chapter.id);
@@ -173,7 +189,8 @@ export default function Home() {
     }
   }, [serverDashboard.data]);
 
-  const daysLeft = Math.max(0, Math.ceil((new Date("2027-01-21T00:00:00").getTime() - Date.now()) / 86400000));
+  const selectedExamDate = jeeMainJanuaryDateOptions.find((option) => option.id === targetDateId) ?? jeeMainJanuaryDateOptions[0];
+  const daysLeft = Math.max(0, Math.ceil((selectedExamDate.date.getTime() - Date.now()) / 86400000));
   const daySessions = sessions.filter((session) => session.completedAt.toDateString() === new Date().toDateString());
   const todayMinutes = daySessions.reduce((total, session) => total + session.minutes, 0);
   const weeklyMinutes = sessions
@@ -277,6 +294,14 @@ export default function Home() {
     const updated = todayPlan.map((item) => item.id === id ? { ...item, ...patch } : item);
     setTodayPlan(updated);
     if (isAuthenticated) saveDailyPlan.mutate({ ...planMeta, items: updated });
+  }
+
+  function chooseExamDate(targetDate: TargetExamDate) {
+    const selected = jeeMainJanuaryDateOptions.find((option) => option.id === targetDate);
+    if (!selected) return;
+    setTargetDateId(targetDate);
+    if (isAuthenticated) saveExamDate.mutate({ targetDate });
+    toast.success(`Your JEE Main target date is set to ${selected.label} 2027.`);
   }
 
   function finishFocus(notes: string, difficulty: "easy" | "okay" | "difficult" | "very_difficult") {
@@ -406,7 +431,7 @@ export default function Home() {
       <main className="mx-auto max-w-[1500px] px-4 pb-28 pt-5 lg:ml-[258px] lg:px-9 lg:pb-12 lg:pt-4">
         {section === "today" && <div className="space-y-6"><TodayCommandCenter plan={todayPlan} readiness={readiness} queue={revisionQueue} alerts={smartAlerts} weeklyMinutes={weeklyMinutes} sessionsCount={sessions.length} reviewBuckets={reviewBuckets} onGenerate={generateTodayPlan} onStartFocus={setFocusTask} onToggleTask={togglePlanTask} onUpdateTask={updatePlanTask} /><ProgressSignals chapters={chapters} mocks={mocks} sessions={sessions} reviews={reviews} streak={streak} /></div>}
         {section === "overview" && <Overview
-          daysLeft={daysLeft} dailyGoal={dailyGoal} todayMinutes={todayMinutes} weeklyMinutes={weeklyMinutes} streak={streak} heatmapDays={heatmapDays} statistics={statistics} nextChapter={nextChapter} sessions={sessions} chartData={chartData} radarData={radarData} aiInsight={aiInsight} insightLoading={insight.isPending} chatMessages={chatMessages} chatLoading={chat.isPending} onAddSession={() => setModal("session")} onAddMock={() => setModal("mock")} onAdvance={() => advanceChapter(nextChapter)} onSendChat={sendMessage} onAskInsight={requestInsight} onOpenSyllabus={() => setSection("syllabus")} />}
+          daysLeft={daysLeft} examDate={selectedExamDate} examDateOptions={jeeMainJanuaryDateOptions} dailyGoal={dailyGoal} todayMinutes={todayMinutes} weeklyMinutes={weeklyMinutes} streak={streak} heatmapDays={heatmapDays} statistics={statistics} nextChapter={nextChapter} sessions={sessions} chartData={chartData} radarData={radarData} aiInsight={aiInsight} insightLoading={insight.isPending} chatMessages={chatMessages} chatLoading={chat.isPending} onAddSession={() => setModal("session")} onAddMock={() => setModal("mock")} onAdvance={() => advanceChapter(nextChapter)} onSelectExamDate={chooseExamDate} onSendChat={sendMessage} onAskInsight={requestInsight} onOpenSyllabus={() => setSection("syllabus")} />}
         {section === "syllabus" && <Syllabus chapters={filteredChapters} search={chapterSearch} setSearch={setChapterSearch} subject={subjectFilter} setSubject={setSubjectFilter} starredOnly={starredOnly} setStarredOnly={setStarredOnly} onUpdate={updateChapter} onAdvance={advanceChapter} onOpenChapter={setSelectedChapter} overall={statistics.overall} />}
         {section === "analytics" && <div className="space-y-6"><Analytics chartData={chartData} radarData={radarData} currentMock={currentMock} bestMock={bestMock} weakSubject={weakSubject} weakTopic={weakTopic} onAddMock={() => setModal("mock")} onAskInsight={() => requestInsight("mistake-pattern analysis")} aiInsight={aiInsight} loading={insight.isPending} /><WeakTopicReport topic={weakTopic} /><MarksLossAnalysis mocks={mocks} /><MockPostMortem total={currentMock.total} mockCount={mocks.length} /></div>}
         {section === "formulas" && <div className="space-y-4"><FormulaFilterBar subject={subjectFilter} setSubject={(value: Subject | "All") => { setSubjectFilter(value); setCardChapterFilter("All chapters"); setActiveCard(0); }} chapterFilter={cardChapterFilter} setChapterFilter={(value: string) => { setCardChapterFilter(value); setActiveCard(0); }} shakyOnly={shakyOnly} setShakyOnly={(value: boolean) => { setShakyOnly(value); setActiveCard(0); }} chapterOptions={Array.from(new Set(flashcards.filter((card) => subjectFilter === "All" || card.subject === subjectFilter).map((card) => card.chapter)))} /><FormulaLab card={shownCard} total={filteredCards.length} index={activeCard % Math.max(filteredCards.length, 1)} flipped={flipped} setFlipped={setFlipped} subject={subjectFilter} setSubject={(value) => { setSubjectFilter(value); setCardChapterFilter("All chapters"); setActiveCard(0); }} reviews={reviews} onMark={markCard} onShuffle={() => { if (filteredCards.length) { setActiveCard(Math.floor(Math.random() * filteredCards.length)); setFlipped(false); } }} /></div>}
@@ -426,7 +451,7 @@ export default function Home() {
 }
 
 function Overview(props: {
-  daysLeft: number; dailyGoal: number; todayMinutes: number; weeklyMinutes: number; streak: number; heatmapDays: { date: Date; minutes: number }[]; statistics: { bySubject: { subject: Subject; score: number; chapters: Chapter[] }[]; overall: number }; nextChapter: Chapter; sessions: Session[]; chartData: { attempt: string; score: number; physics: number; chemistry: number; mathematics: number }[]; radarData: { subject: string; mastery: number }[]; aiInsight: string; insightLoading: boolean; chatMessages: Message[]; chatLoading: boolean; onAddSession: () => void; onAddMock: () => void; onAdvance: () => void; onSendChat: (message: string) => void; onAskInsight: (kind: "next action" | "coach note" | "mistake-pattern analysis") => void; onOpenSyllabus: () => void;
+  daysLeft: number; examDate: ExamDateOption; examDateOptions: ExamDateOption[]; dailyGoal: number; todayMinutes: number; weeklyMinutes: number; streak: number; heatmapDays: { date: Date; minutes: number }[]; statistics: { bySubject: { subject: Subject; score: number; chapters: Chapter[] }[]; overall: number }; nextChapter: Chapter; sessions: Session[]; chartData: { attempt: string; score: number; physics: number; chemistry: number; mathematics: number }[]; radarData: { subject: string; mastery: number }[]; aiInsight: string; insightLoading: boolean; chatMessages: Message[]; chatLoading: boolean; onAddSession: () => void; onAddMock: () => void; onAdvance: () => void; onSelectExamDate: (targetDate: TargetExamDate) => void; onSendChat: (message: string) => void; onAskInsight: (kind: "next action" | "coach note" | "mistake-pattern analysis") => void; onOpenSyllabus: () => void;
 }) {
   const goalPercent = Math.min(100, Math.round(props.todayMinutes / props.dailyGoal * 100));
   const phase = props.daysLeft > 200 ? 1 : props.daysLeft > 120 ? 2 : props.daysLeft > 55 ? 3 : 4;
@@ -434,7 +459,7 @@ function Overview(props: {
     <section className="grid gap-5 xl:grid-cols-[1.55fr_1fr]">
       <div className="relative overflow-hidden rounded-[2rem] bg-[#4D2A1D] px-6 py-7 text-[#FFF8EC] shadow-[0_24px_50px_rgba(79,42,28,0.22)] sm:px-8 sm:py-8">
         <div className="absolute -right-10 -top-12 size-52 rounded-full border border-[#9F755D]/35" /><div className="absolute -bottom-16 right-28 size-44 rounded-full border border-[#9F755D]/25" />
-        <div className="relative"><p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#F2CC8B]">JEE Main 2027</p><div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-1"><h2 className="jee-title text-6xl leading-none sm:text-7xl">{props.daysLeft}</h2><p className="mb-1 text-sm text-[#E8CDB0]">days left to make it count</p></div><p className="mt-5 max-w-md text-sm leading-6 text-[#EFDCCC]">Progress is not perfection. Build your score, one focused block and one honest mock at a time.</p><div className="mt-7 flex items-center gap-2"><button onClick={props.onAddSession} className="rounded-full bg-[#F1C47B] px-4 py-2.5 text-xs font-bold text-[#4D2A1D] transition-transform active:scale-[0.97]"><Plus className="mr-1 inline size-3.5" />Log focus</button><button onClick={props.onOpenSyllabus} className="rounded-full border border-[#9A725D] px-4 py-2.5 text-xs font-bold text-[#FFF8EC] transition-colors hover:bg-white/10">See syllabus</button></div></div>
+        <div className="relative"><p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#F2CC8B]">JEE Main 2027 · selected slot {props.examDate.label}</p><div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-1"><h2 className="jee-title text-6xl leading-none sm:text-7xl">{props.daysLeft}</h2><p className="mb-1 text-sm text-[#E8CDB0]">days left to make it count</p></div><p className="mt-5 max-w-md text-sm leading-6 text-[#EFDCCC]">Progress is not perfection. Build your score, one focused block and one honest mock at a time.</p><div className="mt-6 rounded-2xl border border-[#9A725D]/70 bg-black/10 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#F2CC8B]">Choose your expected January session date</p><div className="mt-2 flex flex-wrap gap-1.5">{props.examDateOptions.map((option) => <button key={option.id} onClick={() => props.onSelectExamDate(option.id)} className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all ${option.id === props.examDate.id ? "bg-[#F1C47B] text-[#4D2A1D] shadow-sm" : "border border-[#A47A62] text-[#FFF8EC] hover:bg-white/10"}`}>{option.label}</button>)}</div><p className="mt-2 text-[10px] text-[#E8CDB0]">Confirm your allotted date with your NTA admit card when it is issued.</p></div><div className="mt-5 flex items-center gap-2"><button onClick={props.onAddSession} className="rounded-full bg-[#F1C47B] px-4 py-2.5 text-xs font-bold text-[#4D2A1D] transition-transform active:scale-[0.97]"><Plus className="mr-1 inline size-3.5" />Log focus</button><button onClick={props.onOpenSyllabus} className="rounded-full border border-[#9A725D] px-4 py-2.5 text-xs font-bold text-[#FFF8EC] transition-colors hover:bg-white/10">See syllabus</button></div></div>
       </div>
       <div className="jee-panel flex flex-col justify-between p-6"><div className="flex items-start justify-between"><div><p className="jee-kicker">Today’s focus</p><h2 className="jee-title mt-2 text-2xl">Your steady pace.</h2></div><div className="grid size-12 place-items-center rounded-2xl bg-[#F5E4CE] text-[#A26235]"><Target className="size-5" /></div></div><div className="mt-5 flex items-end justify-between"><div><p className="text-3xl font-bold tracking-tight">{props.todayMinutes}<span className="text-base font-medium text-[#AA8B78]"> / {props.dailyGoal} min</span></p><p className="mt-1 text-xs text-[#977665]">{props.weeklyMinutes} minutes this week</p></div><div className="grid size-20 place-items-center rounded-full" style={{ background: `conic-gradient(#C78A4B ${goalPercent * 3.6}deg, #F4E8DB 0deg)` }}><div className="grid size-14 place-items-center rounded-full bg-[#FFFDF9] text-xs font-bold">{goalPercent}%</div></div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-[#F3E5D6]"><div className="h-full rounded-full bg-[#C78A4B] transition-all" style={{ width: `${goalPercent}%` }} /></div></div>
     </section>

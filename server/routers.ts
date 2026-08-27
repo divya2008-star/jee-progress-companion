@@ -42,6 +42,8 @@ const practiceSetSchema = z.object({
   questions: z.array(practiceQuestionSchema).min(3).max(10),
 });
 
+const targetDateInput = z.enum(["2027-01-21", "2027-01-22", "2027-01-23", "2027-01-24", "2027-01-28"]);
+
 async function generateGuidance(kind: string, message: string, context: string) {
   const prompt = kind === "chat"
     ? `Student message: ${message}`
@@ -73,6 +75,7 @@ export const appRouter = router({
   student: router({
     dashboard: protectedProcedure.query(({ ctx }) => db.getStudentDashboard(ctx.user.id)),
     setDailyGoal: protectedProcedure.input(z.object({ minutes: z.number().int().min(15).max(720) })).mutation(({ ctx, input }) => db.setDailyGoal(ctx.user.id, input.minutes)),
+    setExamDate: protectedProcedure.input(z.object({ targetDate: targetDateInput })).mutation(({ ctx, input }) => db.setTargetExamDate(ctx.user.id, new Date(`${input.targetDate}T12:00:00.000Z`))),
     saveChapter: protectedProcedure.input(chapterInput).mutation(({ ctx, input }) => db.saveChapterProgress({ userId: ctx.user.id, ...input })),
     addSession: protectedProcedure.input(z.object({ minutes: z.number().int().min(5).max(720), focus: z.string().min(1).max(120), completedAt: z.date(), notes: z.string().max(2000).optional(), difficulty: z.enum(["easy", "okay", "difficult", "very_difficult"]).optional() })).mutation(({ ctx, input }) => db.addStudySession(ctx.user.id, input.minutes, input.focus, input.completedAt, input.notes, input.difficulty)),
     addMock: protectedProcedure.input(z.object({ physics: z.number().int().min(0).max(100), chemistry: z.number().int().min(0).max(100), mathematics: z.number().int().min(0).max(100), attemptedAt: z.date() })).mutation(({ ctx, input }) => db.addMockTest(ctx.user.id, input.physics, input.chemistry, input.mathematics, input.attemptedAt)),

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./db", () => ({
   getStudentDashboard: vi.fn(),
   setDailyGoal: vi.fn(),
+  setTargetExamDate: vi.fn(),
   saveChapterProgress: vi.fn(),
   addStudySession: vi.fn(),
   addMockTest: vi.fn(),
@@ -10,7 +11,7 @@ vi.mock("./db", () => ({
   saveDailyPlan: vi.fn(),
 }));
 
-import { addMockTest, addStudySession, saveChapterProgress, saveDailyPlan, saveFlashcardReview, setDailyGoal } from "./db";
+import { addMockTest, addStudySession, saveChapterProgress, saveDailyPlan, saveFlashcardReview, setDailyGoal, setTargetExamDate } from "./db";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -28,6 +29,15 @@ describe("student record procedures", () => {
   it("saves the daily goal for the authenticated student", async () => {
     await appRouter.createCaller(context()).student.setDailyGoal({ minutes: 210 });
     expect(setDailyGoal).toHaveBeenCalledWith(7, 210);
+  });
+
+  it("saves only an approved January target date for the authenticated student", async () => {
+    const caller = appRouter.createCaller(context());
+    await caller.student.setExamDate({ targetDate: "2027-01-24" });
+    expect(setTargetExamDate).toHaveBeenCalledWith(7, new Date("2027-01-24T12:00:00.000Z"));
+
+    await expect(caller.student.setExamDate({ targetDate: "2027-01-25" as never })).rejects.toThrow();
+    expect(setTargetExamDate).toHaveBeenCalledTimes(1);
   });
 
   it("saves a full chapter-progress record with user ownership", async () => {

@@ -50,4 +50,12 @@
 - [x] Run and document end-to-end MCQ generation, answer feedback, correct-answer reveal, and next-question gating.
 - [x] Add route-level verification that every visible Copilot output path is sanitized before rendering.
 - [x] Add an integrated test that verifies a generated MCQ set passes through answer feedback and gated progression rules.
+- [x] Capture a current dashboard screenshot for the hackathon presentation.
+- [x] Prepare an executive hackathon narrative covering the problem, solution, student flows, AI, technical design, and impact.
+- [x] Generate and deliver a polished PowerPoint presentation for the JEE Progress Companion.
+- [x] Send the completed PowerPoint deck attachment and confirm the included product screenshot.
+- [x] Verify official JEE Main January-session dates and identify the fixed exam-date references in the dashboard.
+- [x] Add a persistent exam-date selector with four to five official January-session options.
+- [x] Update countdowns and date-dependent study guidance when the student changes the selected exam date.
+- [x] Add tests and desktop/mobile verification for the selectable exam-date experience.
 - [x] Repair the light-card text contrast in the legacy Overview, Syllabus, and Analytics sections within the dark command-center shell.

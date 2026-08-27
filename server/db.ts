@@ -77,6 +77,14 @@ export async function setDailyGoal(userId: number, dailyGoalMinutes: number) {
   });
 }
 
+export async function setTargetExamDate(userId: number, targetExamDate: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable");
+  await db.insert(studentProfiles).values({ userId, dailyGoalMinutes: 180, targetExamDate }).onDuplicateKeyUpdate({
+    set: { targetExamDate, updatedAt: new Date() },
+  });
+}
+
 export async function saveChapterProgress(input: {
   userId: number; chapterId: string; subject: "Physics" | "Chemistry" | "Mathematics";
   stage: "not_started" | "revising" | "revised" | "test_ready"; targetWeek: number;

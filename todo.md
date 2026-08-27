@@ -83,3 +83,6 @@
 - [x] Add a GitHub repository description and detailed README with capabilities and local setup.
 - [ ] Verify the published documentation on GitHub and share the updated repository link.
 - [x] Change the Momentum GitHub repository visibility from private to public for sharing.
+- [x] Review the Make Today Count pointer interaction and identify only the cursor-glow implementation.
+- [x] Remove the cursor-following glow while preserving the hero’s static visual treatment and all other functionality.
+- [ ] Verify the focused hero change, publish the refreshed project, and update the GitHub source.

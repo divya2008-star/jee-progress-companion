@@ -25,33 +25,21 @@ export function TodayCommandCenter({ plan, readiness, queue, alerts, weeklyMinut
   const [intensity, setIntensity] = useState<PlannerIntensity>("focused");
   const [subjects, setSubjects] = useState<Subject[]>(["Physics", "Chemistry", "Mathematics"]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [heroLens, setHeroLens] = useState({ x: 0, y: 0, active: false });
   const completed = plan.filter((item) => item.completed).length;
-
-  function moveHeroLens(event: React.MouseEvent<HTMLElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    setHeroLens({ x: event.clientX - bounds.left, y: event.clientY - bounds.top, active: true });
-  }
 
   function toggleSubject(subject: Subject) {
     setSubjects((items) => items.includes(subject) ? (items.length > 1 ? items.filter((item) => item !== subject) : items) : [...items, subject]);
   }
 
   return <div className="today-shell space-y-6 pb-10">
-    <section
-      className="today-hero today-hero--interactive overflow-hidden rounded-[2.25rem] p-6 sm:p-8 lg:p-10"
-      style={{ "--lens-x": `${heroLens.x}px`, "--lens-y": `${heroLens.y}px`, "--lens-opacity": heroLens.active ? "1" : "0" } as React.CSSProperties}
-      onMouseMove={moveHeroLens}
-      onMouseEnter={() => setHeroLens((lens) => ({ ...lens, active: true }))}
-      onMouseLeave={() => setHeroLens((lens) => ({ ...lens, active: false }))}
-    >
+    <section className="today-hero overflow-hidden rounded-[2.25rem] p-6 sm:p-8 lg:p-10">
       <div className="today-grid absolute inset-0 opacity-35" />
       <div className="relative grid gap-8 xl:grid-cols-[1.25fr_.75fr] xl:items-end">
         <div>
           <p className="today-kicker"><CircleDotDashed className="size-3.5" /> Today’s command center</p>
           <h2 className="today-hero-title mt-4 max-w-3xl text-5xl font-black tracking-[-.07em] text-white sm:text-7xl">MAKE <span className="text-[#C7FF3C]">TODAY</span> COUNT.</h2>
           <p className="mt-5 max-w-xl text-sm leading-6 text-white/65 sm:text-base">Your plan is calculated from mastery stage, active target weeks, mock splits, revision signals, and the formula cards that need retrieval practice.</p>
-          <p className="today-hero-hint mt-4 text-xs font-bold uppercase tracking-[.16em] text-white/45">Move across the signal · your preparation stays in motion</p>
+          <p className="today-hero-hint mt-4 text-xs font-bold uppercase tracking-[.16em] text-white/45">Daily signals · smart sequencing · clear momentum</p>
           <div className="mt-7 flex flex-wrap gap-3"><div className="today-stat"><Flame className="size-4 text-[#FF4FA7]" /><span>{weeklyMinutes} minutes this week</span></div><div className="today-stat"><TimerReset className="size-4 text-[#63C8FF]" /><span>{sessionsCount} focus blocks logged</span></div></div>
         </div>
         <div className="rounded-[1.8rem] border border-white/12 bg-white/[.07] p-5 backdrop-blur-sm"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-white/45">JEE readiness</p><div className="mt-3 flex items-end justify-between"><p className="text-6xl font-black tracking-[-.08em] text-white">{readiness}<span className="text-2xl text-white/45">%</span></p><div className="grid size-16 place-items-center rounded-full border-[5px] border-[#C7FF3C] text-xs font-bold text-[#C7FF3C]">LIVE</div></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-[#C7FF3C] via-[#63C8FF] to-[#FF4FA7]" style={{ width: `${readiness}%` }} /></div><p className="mt-4 text-xs leading-5 text-white/55">Internal preparation signal—not a rank prediction. It responds to coverage, mocks, revision rhythm, and formula retention.</p></div>

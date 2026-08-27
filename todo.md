@@ -76,3 +76,6 @@
 - [x] Complete the final focused Make Today Count update handoff.
 - [x] Capture the expanded chapter Copilot panel and mock post-mortem panel at the mobile breakpoint after the hero update.
 - [x] Add the explicit all-Copilot-surface mobile verification result to the project notes and deliver the focused update.
+- [ ] Inspect the project Git status and existing GitHub remote configuration.
+- [ ] Create or connect a private GitHub repository and push the current verified source code.
+- [ ] Verify the pushed remote repository and provide its GitHub URL.

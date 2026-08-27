@@ -59,3 +59,20 @@
 - [x] Update countdowns and date-dependent study guidance when the student changes the selected exam date.
 - [x] Add tests and desktop/mobile verification for the selectable exam-date experience.
 - [x] Repair the light-card text contrast in the legacy Overview, Syllabus, and Analytics sections within the dark command-center shell.
+- [x] Prepare verified, graph-rich slide content explaining Momentum’s problem, student workflows, study signals, AI capability, and impact.
+- [x] Create source-backed data visualizations for the hackathon presentation without fabricating student outcomes.
+- [x] Generate and deliver the comprehensive Momentum hackathon PowerPoint deck.
+- [x] Send the new comprehensive Momentum hackathon deck attachment with presentation guidance.
+- [x] Analyze the supplied motion reference and current Make Today Count implementation.
+- [x] Redesign only the Make Today Count section with a premium hover-driven colour and motion treatment.
+- [x] Verify the focused section refinement on desktop and mobile without changing other dashboard features.
+- [x] Verify key non-Today sections remain unaffected by the shared styling after the hero redesign.
+- [x] Record the completed cross-section verification result in the project verification notes.
+- [x] Verify non-Today sections and visible Copilot surfaces at the mobile breakpoint after the Today hero redesign.
+- [x] Reconfirm the Make Today Count and cross-section verification notes before the final handoff.
+- [x] Re-read and confirm the documented mobile regression sweep, including every visible Copilot surface.
+- [x] Verify the chapter-detail Copilot and mock post-mortem AI panels at the mobile breakpoint after the Today hero refinement.
+- [x] Update the verification record with the completed all-Copilot-surface mobile sweep.
+- [x] Complete the final focused Make Today Count update handoff.
+- [x] Capture the expanded chapter Copilot panel and mock post-mortem panel at the mobile breakpoint after the hero update.
+- [x] Add the explicit all-Copilot-surface mobile verification result to the project notes and deliver the focused update.

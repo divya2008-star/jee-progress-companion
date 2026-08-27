@@ -120,7 +120,11 @@ export default function Home() {
   const [starredOnly, setStarredOnly] = useState(false);
   const [activeCard, setActiveCard] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(() => {
+    const requestedChapter = new URLSearchParams(window.location.search).get("chapter");
+    if (requestedChapter === "first") return initialChapters[0] ?? null;
+    return initialChapters.find((chapter) => chapter.id === requestedChapter) ?? null;
+  });
   const [cardChapterFilter, setCardChapterFilter] = useState("All chapters");
   const [shakyOnly, setShakyOnly] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
